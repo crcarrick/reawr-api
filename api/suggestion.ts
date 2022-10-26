@@ -4,9 +4,12 @@ import { StatusCodes } from 'http-status-codes'
 import { getGithubClient } from '../utils'
 
 interface IIssue {
+  readonly email: string
   readonly title: string
   readonly body: string
 }
+
+const REQUIRED_FIELDS = ['email', 'title', 'body']
 
 export default async function (
   request: VercelRequest,
@@ -21,15 +24,20 @@ export default async function (
     if (requestBody == null)
       return response
         .status(StatusCodes.BAD_REQUEST)
-        .json({ error: '`title` and `body` are required' })
-    if (requestBody.title == null)
-      return response
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ error: '`title` is required' })
-    if (requestBody.body == null)
-      return response
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ error: '`body` is required' })
+        .json({ error: '`email` `title` and `body` are required' })
+
+    for (const field of REQUIRED_FIELDS) {
+      const missing = REQUIRED_FIELDS.filter(
+        (field) => requestBody[field] == null
+      )
+        .map((field) => `\`${field}\``)
+        .join(' ')
+
+      if (requestBody[field] == null)
+        return response
+          .status(StatusCodes.BAD_REQUEST)
+          .json({ error: `${missing} are required` })
+    }
 
     const client = await getGithubClient()
 
@@ -40,7 +48,10 @@ export default async function (
       owner: 'crcarrick',
       repo: 'reawr',
       title: requestBody.title,
-      body: requestBody.body,
+      body: `${requestBody.email}:
+
+${requestBody.body}
+      `,
     })
 
     return response.status(StatusCodes.OK).json({
