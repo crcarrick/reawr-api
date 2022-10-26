@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 import { StatusCodes } from 'http-status-codes'
 
-import { getGithubClient } from '../utils'
+import { allowCors, getGithubClient } from '../utils'
 
 interface IIssue {
   readonly email: string
@@ -11,20 +11,26 @@ interface IIssue {
 
 const REQUIRED_FIELDS = ['email', 'title', 'body']
 
-export default async function (
+export default allowCors(async function handler(
   request: VercelRequest,
   response: VercelResponse
 ) {
   try {
-    if (request.method !== 'POST')
-      return response.status(StatusCodes.METHOD_NOT_ALLOWED)
+    if (request.method !== 'POST') {
+      response.status(StatusCodes.METHOD_NOT_ALLOWED).end()
+
+      return
+    }
 
     const requestBody: IIssue = request.body
 
-    if (requestBody == null)
-      return response
+    if (requestBody == null) {
+      response
         .status(StatusCodes.BAD_REQUEST)
         .json({ error: '`email` `title` and `body` are required' })
+
+      return
+    }
 
     for (const field of REQUIRED_FIELDS) {
       const missing = REQUIRED_FIELDS.filter(
@@ -33,16 +39,23 @@ export default async function (
         .map((field) => `\`${field}\``)
         .join(' ')
 
-      if (requestBody[field] == null)
-        return response
+      if (requestBody[field] == null) {
+        response
           .status(StatusCodes.BAD_REQUEST)
           .json({ error: `${missing} are required` })
+
+        return
+      }
     }
 
     const client = await getGithubClient()
 
     // TODO: This won't *really* always mean too many requests
-    if (client == null) return response.status(StatusCodes.TOO_MANY_REQUESTS)
+    if (client == null) {
+      response.status(StatusCodes.TOO_MANY_REQUESTS)
+
+      return
+    }
 
     const issue = await client.issues.create({
       owner: 'crcarrick',
@@ -54,12 +67,12 @@ ${requestBody.body}
       `,
     })
 
-    return response.status(StatusCodes.OK).json({
+    response.status(StatusCodes.OK).json({
       url: issue.data.url,
     })
   } catch (err) {
     console.error(`Error in /suggestion ${err.message}`)
 
-    return response.status(StatusCodes.INTERNAL_SERVER_ERROR)
+    response.status(StatusCodes.INTERNAL_SERVER_ERROR).end()
   }
-}
+})
