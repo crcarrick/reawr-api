@@ -33,6 +33,7 @@ export default async function (
 
     const client = await getGithubClient()
 
+    // TODO: This won't *really* always mean too many requests
     if (client == null) return response.status(StatusCodes.TOO_MANY_REQUESTS)
 
     const issue = await client.issues.create({
